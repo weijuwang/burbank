@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+build/**
+
+.vscode/**
+.cache/**
+
+src/parser.*
+src/grammar.*
+src/main.cpp
+CMakeLists.txt
