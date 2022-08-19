@@ -36,6 +36,5 @@ build/**
 .cache/**
 
 src/parser.*
-src/grammar.*
 src/main.cpp
 CMakeLists.txt

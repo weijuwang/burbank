@@ -1,25 +1,34 @@
 /**
- * @file tokenizer.cpp
+ * @file lexer.cpp
  * @author Weiju Wang (weijuwang@aol.com)
  * @brief Tokenizes a string.
  * @date 2022-08-17
  */
 
-#include "tokenizer.hpp"
+#include "lexer.hpp"
 
 using namespace burbank;
+using burbank::lexer;
 
-tokenizer::tokenizer(const decltype(tokenizer::tokenTypes)& tokenTypes):
+const decltype(lexer::tokens) lexer::tokens =
+{
+    {keyword, std::regex(KEYWORD)},
+    {identifier, std::regex(IDENTIFIER)},
+    {constant, std::regex(CONSTANT)},
+    {stringLiteral, std::regex(STRING_LITERAL)},
+    {punctuator, std::regex(PUNCTUATOR)},
+};
+
+lexer::lexer(const decltype(lexer::tokenTypes)& tokenTypes):
     tokenTypes(tokenTypes)
 {}
 
-std::vector<tokenizer::token> tokenizer::tokenize(const std::string& text) noexcept
+std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
 {
     std::vector<token> output;
     std::optional<token> longest;
     std::string tokenContent;
 
-    this->ambiguous = false;
     this->_pos = text.begin();
 
     // Until the end of the string
@@ -34,38 +43,32 @@ std::vector<tokenizer::token> tokenizer::tokenize(const std::string& text) noexc
             {
                 tokenContent = this->_match.str();
 
-                if(longest.has_value())
-                {
-                    // Only continue if this token is longer
-                    // (Always try to match the longest possible token)
-                    if(tokenContent.size() < longest->value.size())
-                        break;
-                    // If two different types of tokens can be matched, then the text is ambiguous here.
-                    else if(tokenContent.size() == longest->value.size())
-                    {
-                        this->ambiguous = true;
-                        goto done;
-                    }
-                }
+                if(longest.has_value() && tokenContent.size() < longest->value.size())
+                    break;
 
                 // Add the token
                 longest = { lexemeType, tokenContent };
-
-                // Move `pos` to after the token
-                _pos = this->_match[0].second;
             }
         }
 
         // If a token was matched
         if(longest.has_value())
+        {
+            // Add the token to the list
             output.push_back(*longest);
+
+            // Move `pos` to after the token
+            _pos += longest->value.size();
+
+            longest.reset();
+        }
         else goto done;
     }
 
     done: return output;
 }
 
-decltype(tokenizer::_pos) tokenizer::errpos(void) noexcept
+decltype(lexer::_pos) lexer::errpos(void) noexcept
 {
     return this->_pos;
 }
