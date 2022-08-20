@@ -1,7 +1,8 @@
 /**
  * @file lexer.hpp
  * @author Weiju Wang (weijuwang@aol.com)
- * @brief Tokenizes a string.
+ * @brief Tokenizes C code.
+ * @see https://docs.microsoft.com/en-us/cpp/c-language/lexical-grammar?view=msvc-170
  * @date 2022-08-17
  */
 
@@ -27,8 +28,7 @@
 #define BACKSLASH LITERAL("\\")
 #define QUOTE "\""
 #define NEWLINE "\\n"
-
-// https://docs.microsoft.com/en-us/cpp/c-language/lexical-grammar?view=msvc-170
+#define WHITESPACE "\\s"
 
 /* Keywords */
 
@@ -219,7 +219,7 @@
 /* String literals */
 
 #define STRING_LITERAL BLOCK( \
-    ENCODING_PREFIX QUOTE OPTIONAL(S_CHAR_SEQUENCE) QUOTE \
+    OPTIONAL(ENCODING_PREFIX) QUOTE OPTIONAL(S_CHAR_SEQUENCE) QUOTE \
 )
 
 #define ENCODING_PREFIX BLOCK( \
@@ -233,18 +233,25 @@
     OR ESCAPE_SEQUENCE \
 )
 
-/* Punctuators */
-
+/* Punctuators
+    Must be sorted by length, longest to shortest.
+*/
 #define PUNCTUATOR BLOCK( \
-    ANY_OF("&" LITERAL("*") "-~!%<>?:;=,#") OR LITERAL("+") OR LITERAL("/") \
-    OR LITERAL("[") OR LITERAL("]") OR LITERAL("(") OR LITERAL(")") \
-    OR LITERAL("{") OR LITERAL("}") OR LITERAL(".") OR "->" \
+/* 4 chars */ \
+    "%:%:" \
+/* 3 chars */ \
+    OR "<<=" OR ">>=" OR LITERAL(".") "{3}" \
+/* 2 chars */ \
     OR BLOCK(LITERAL("+") LITERAL("+")) OR "--" OR "<<" OR ">>" \
-    OR "<=" OR ">=" OR "==" OR "!=" OR LITERAL("^") OR LITERAL("|") \
+    OR "<=" OR ">=" OR "==" OR "!=" \
     OR "&&" OR BLOCK(LITERAL("|") LITERAL("|")) \
-    OR LITERAL(".") "{3}" OR LITERAL("*=") OR "/=" OR "%=" OR LITERAL("+=") OR "-=" \
-    OR "<<=" OR ">>=" OR "&=" OR LITERAL("^=") OR LITERAL("|=") OR "##" \
-    OR "<:" OR ":>" OR "<%" OR "%>" OR "%:" OR "%:%:" \
+     OR LITERAL("*=") OR "/=" OR "%=" OR LITERAL("+=") OR "-=" \
+    OR "&=" OR LITERAL("^=") OR LITERAL("|=") OR "##" \
+    OR "<:" OR ":>" OR "<%" OR "%>" OR "%:" OR "->" \
+/* 1 char */ \
+    OR ANY_OF("&" LITERAL("*") "-~!%<>?:;=,#") OR LITERAL("+") OR LITERAL("/") \
+    OR LITERAL("[") OR LITERAL("]") OR LITERAL("(") OR LITERAL(")") \
+    OR LITERAL("{") OR LITERAL("}") OR LITERAL(".") OR LITERAL("^") OR LITERAL("|") \
 )
 
 /* Header names */
@@ -265,8 +272,8 @@
 namespace burbank
 {
     /**
-    * @brief Tokenizes a string.
-    */
+     * @brief Tokenizes a string.
+     */
     class lexer
     {
     private:
@@ -277,10 +284,11 @@ namespace burbank
     public:
 
         /**
-         * @brief A type of lexical token. @see https://docs.microsoft.com/en-us/cpp/c-language/lexical-grammar?view=msvc-170
+         * @brief A nonterminal symbol.
          */
-        enum tokenType
+        enum nonterminalName
         {
+            whitespace,
             keyword,
             identifier,
             constant,
@@ -289,43 +297,51 @@ namespace burbank
         };
 
         /**
-        * @brief A recognized token in a string. This is the data outputted by the tokenizer.
-        */
+         * @brief A recognized token in a string.
+         */
         struct token
         {
-            tokenType type;
+            nonterminalName name;
             std::string value;
         };
 
-        static const std::map<decltype(token::type), std::regex> tokens;
+        static const std::map<decltype(token::name), std::regex> tokens;
 
         /**
-        * @brief List of all token types understood by the tokenizer.
-        * Key = token type
-        * Value = token pattern as `std::regex`
-        */
+         * @brief Nonterminal symbols outputted by the lexer.
+         *
+         * Key = nonterminal name
+         *
+         * Value = `std::regex` (token pattern)
+         */
         std::map<
-            decltype(token::type),
+            decltype(token::name),
             std::regex
-        > tokenTypes;
+        > nonterminals;
 
         /**
-        * @brief Construct a new tokenizer object.
-        */
-        lexer(const decltype(lexer::tokenTypes)& tokenTypes);
+         * @brief Construct a new tokenizer object.
+         */
+        inline lexer(const decltype(lexer::nonterminals)& nonterminals) noexcept
+        :
+            nonterminals(nonterminals)
+        {}
 
         /**
-        * @brief Tokenize a string.
-        *
-        * @note Regardless of whether the string is valid, this function will never throw an exception. The operation only succeeded if `errpos() == text.end()`.
-        *
-        * @return std::vector<tokenizer::token> All tokens that were produced up until `errpos()`.
-        */
+         * @brief Tokenize a string.
+         *
+         * @note Regardless of whether the string is valid, this function will never throw an exception. The operation only succeeded if `errpos() == text.end()`.
+         *
+         * @return std::vector<tokenizer::token> All tokens that were produced up until `errpos()`.
+         */
         std::vector<lexer::token> tokenize(const std::string& text) noexcept;
 
         /**
-        * @brief The position at which there was an error, or the end of the string if no error occurred.
-        */
-        decltype(_pos) errpos(void) noexcept;
+         * @brief The position at which there was an error, or the end of the string if no error occurred.
+         */
+        inline decltype(_pos) errpos(void) noexcept
+        {
+            return this->_pos;
+        }
     };
 }

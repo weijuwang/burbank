@@ -1,27 +1,23 @@
 /**
  * @file lexer.cpp
  * @author Weiju Wang (weijuwang@aol.com)
- * @brief Tokenizes a string.
+ * @brief Tokenizes C code.
  * @date 2022-08-17
  */
 
 #include "lexer.hpp"
 
-using namespace burbank;
 using burbank::lexer;
 
 const decltype(lexer::tokens) lexer::tokens =
 {
+    {whitespace, std::regex(WHITESPACE)},
     {keyword, std::regex(KEYWORD)},
     {identifier, std::regex(IDENTIFIER)},
     {constant, std::regex(CONSTANT)},
     {stringLiteral, std::regex(STRING_LITERAL)},
     {punctuator, std::regex(PUNCTUATOR)},
 };
-
-lexer::lexer(const decltype(lexer::tokenTypes)& tokenTypes):
-    tokenTypes(tokenTypes)
-{}
 
 std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
 {
@@ -32,22 +28,30 @@ std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
     this->_pos = text.begin();
 
     // Until the end of the string
-    while(_pos != text.end())
+    while(this->_pos != text.end())
     {
-        // For each lexeme
-        for(const auto& [lexemeType, lexeme] : tokenTypes)
+        // For each nonterminal
+        for(const auto& [tokenName, regex] : nonterminals)
         {
             // If the lexeme matches at exactly `_pos`
-            if(std::regex_search(_pos, text.end(), this->_match, lexeme)
-                and this->_match[0].first == _pos)
+            if(std::regex_search(this->_pos, text.end(), this->_match, regex)
+                and this->_match[0].first == this->_pos)
             {
                 tokenContent = this->_match.str();
 
-                if(longest.has_value() && tokenContent.size() < longest->value.size())
+                // Skip whitespace
+                if(tokenName == whitespace)
+                {
+                    this->_pos += tokenContent.length();
+                    goto nextToken;
+                }
+
+                if(longest.has_value()
+                    && tokenContent.length() < longest->value.length())
                     break;
 
                 // Add the token
-                longest = { lexemeType, tokenContent };
+                longest = { tokenName, tokenContent };
             }
         }
 
@@ -58,17 +62,14 @@ std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
             output.push_back(*longest);
 
             // Move `pos` to after the token
-            _pos += longest->value.size();
+            this->_pos += longest->value.length();
 
             longest.reset();
         }
-        else goto done;
+        else return output;
+
+        nextToken:;
     }
 
-    done: return output;
-}
-
-decltype(lexer::_pos) lexer::errpos(void) noexcept
-{
-    return this->_pos;
+    return output;
 }
