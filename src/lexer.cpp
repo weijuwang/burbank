@@ -11,12 +11,13 @@ using burbank::lexer;
 
 const decltype(lexer::tokens) lexer::tokens =
 {
+    {newlines, std::regex(NEWLINES)},
     {whitespace, std::regex(WHITESPACE)},
     {keyword, std::regex(KEYWORD)},
     {identifier, std::regex(IDENTIFIER)},
     {constant, std::regex(CONSTANT)},
     {stringLiteral, std::regex(STRING_LITERAL)},
-    {punctuator, std::regex(PUNCTUATOR)},
+    {punctuator, std::regex(PUNCTUATOR)}
 };
 
 std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
@@ -39,16 +40,17 @@ std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
             {
                 tokenContent = this->_match.str();
 
-                // Skip whitespace
-                if(tokenName == whitespace)
+                // Skip whitespace, or newlines if not `inclNewlines`
+                if(tokenName == whitespace
+                    or (not this->includeNewlines and tokenName == newlines))
                 {
                     this->_pos += tokenContent.length();
                     goto nextToken;
                 }
 
                 if(longest.has_value()
-                    && tokenContent.length() < longest->value.length())
-                    break;
+                    and tokenContent.length() < longest->value.length())
+                    continue;
 
                 // Add the token
                 longest = { tokenName, tokenContent };

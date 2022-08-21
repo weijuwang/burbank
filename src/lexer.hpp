@@ -20,6 +20,7 @@
 #define OR "|"
 #define LITERAL(c) "\\" c
 #define BLOCK(r) "(" r ")"
+#define ZERO_OR_MORE(r) BLOCK(r) "*"
 #define ONE_OR_MORE(r) BLOCK(r) "+"
 #define OPTIONAL(r) BLOCK(r) "?"
 #define ANY_EXCEPT(r) "[^" r "]"
@@ -27,8 +28,11 @@
 
 #define BACKSLASH LITERAL("\\")
 #define QUOTE "\""
+#define CARRIAGE_RETURN "\\r"
 #define NEWLINE "\\n"
-#define WHITESPACE "\\s"
+#define WHITESPACE ANY_EXCEPT("\\S" CARRIAGE_RETURN NEWLINE)
+
+#define NEWLINES ONE_OR_MORE(NEWLINE OR CARRIAGE_RETURN)
 
 /* Keywords */
 
@@ -70,7 +74,7 @@
 #define CONSTANT BLOCK( \
     INTEGER_CONSTANT \
     OR FLOATING_CONSTANT \
-    OR ENUMERATION_CONSTANT \
+    /* OR ENUMERATION_CONSTANT */ \
     OR CHARACTER_CONSTANT \
 )
 
@@ -84,7 +88,7 @@
     OPTIONAL(INTEGER_SUFFIX) \
 )
 
-#define DECIMAL_CONSTANT BLOCK(NONZERO_DIGIT ONE_OR_MORE(DIGIT))
+#define DECIMAL_CONSTANT BLOCK(NONZERO_DIGIT ZERO_OR_MORE(DIGIT))
 #define BINARY_CONSTANT BLOCK(BINARY_PREFIX ONE_OR_MORE(BINARY_DIGIT))
 
 #define BINARY_PREFIX "0" ANY_OF("b" "B")
@@ -182,7 +186,14 @@
 
 #define FLOATING_SUFFIX ANY_OF("f" "F" "l" "L")
 
-#define ENUMERATION_CONSTANT IDENTIFIER
+/*
+This seems rather useless. It only exists in the original lexical grammar
+because it's referenced later by the parser, but since my lexer cannot
+distinguish between an `identifier` and an `enumeration-constant`, the
+parser will never see an `enumeration-constant`.
+*/
+//#define ENUMERATION_CONSTANT IDENTIFIER
+
 #define CHARACTER_CONSTANT BLOCK( \
     OPTIONAL("L") "'" C_CHAR_SEQUENCE "'" \
 )
@@ -237,19 +248,18 @@
     Must be sorted by length, longest to shortest.
 */
 #define PUNCTUATOR BLOCK( \
-/* 4 chars */ \
-    "%:%:" \
 /* 3 chars */ \
-    OR "<<=" OR ">>=" OR LITERAL(".") "{3}" \
+    "<<=" OR ">>=" OR LITERAL(".") "{3}" \
 /* 2 chars */ \
     OR BLOCK(LITERAL("+") LITERAL("+")) OR "--" OR "<<" OR ">>" \
     OR "<=" OR ">=" OR "==" OR "!=" \
     OR "&&" OR BLOCK(LITERAL("|") LITERAL("|")) \
-     OR LITERAL("*=") OR "/=" OR "%=" OR LITERAL("+=") OR "-=" \
+     OR LITERAL("*=") OR LITERAL("/=") OR "%=" OR LITERAL("+=") OR "-=" \
     OR "&=" OR LITERAL("^=") OR LITERAL("|=") OR "##" \
-    OR "<:" OR ":>" OR "<%" OR "%>" OR "%:" OR "->" \
+    OR "<:" OR ":>" OR "<%" OR "%>" OR "->" \
 /* 1 char */ \
-    OR ANY_OF("&" LITERAL("*") "-~!%<>?:;=,#") OR LITERAL("+") OR LITERAL("/") \
+    OR ANY_OF("&" LITERAL("*") LITERAL("?") LITERAL("-") "~!%<>:;=,#") \
+    OR LITERAL("+") OR LITERAL("/") \
     OR LITERAL("[") OR LITERAL("]") OR LITERAL("(") OR LITERAL(")") \
     OR LITERAL("{") OR LITERAL("}") OR LITERAL(".") OR LITERAL("^") OR LITERAL("|") \
 )
@@ -277,17 +287,16 @@ namespace burbank
     class lexer
     {
     private:
-
         std::smatch _match;
         std::string::const_iterator _pos;
 
     public:
-
         /**
          * @brief A nonterminal symbol.
          */
         enum nonterminalName
         {
+            newlines,
             whitespace,
             keyword,
             identifier,
@@ -320,17 +329,27 @@ namespace burbank
         > nonterminals;
 
         /**
+         * @brief Whether to include newlines in the output.
+         */
+        const bool includeNewlines;
+
+        /**
          * @brief Construct a new tokenizer object.
          */
-        inline lexer(const decltype(lexer::nonterminals)& nonterminals) noexcept
+        inline lexer(
+            const decltype(lexer::nonterminals)& nonterminals,
+            const bool includeNewlines = false
+        ) noexcept
         :
-            nonterminals(nonterminals)
+            nonterminals(nonterminals), includeNewlines(includeNewlines)
         {}
 
         /**
          * @brief Tokenize a string.
          *
          * @note Regardless of whether the string is valid, this function will never throw an exception. The operation only succeeded if `errpos() == text.end()`.
+         *
+         * @param text The text to tokenize.
          *
          * @return std::vector<tokenizer::token> All tokens that were produced up until `errpos()`.
          */
