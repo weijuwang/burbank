@@ -997,9 +997,23 @@ MATCH(ref)
     if(nonterminals.contains(this->data))
     {
         // Get its syntax, return the result of matching it, and record that this was a named rule
-        auto result = nonterminals[this->data]->match(tokens, pos);
-        result->name = this->data;
-        return result;
+        std::optional<ast> result = nonterminals[this->data]->match(tokens, pos);
+
+        // If the syntax was named
+        if(result->name.has_value())
+        {
+            // Return a node with a single branch linking to the result, so that the original name is preserved
+            return ast {
+                this->data,
+                result->value,
+                { *result }
+            };
+        }
+        else
+        {
+            result->name = this->data;
+            return result;
+        }
     }
     else
         return std::nullopt;

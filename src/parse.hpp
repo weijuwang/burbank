@@ -221,6 +221,17 @@ namespace burbank::parse
         :
             value(value)
         {}
+
+        /**
+         * @brief Constructs an AST tree.
+         */
+        inline ast(
+            const decltype(name)& name,
+            const std::string& value,
+            const decltype(branches) branches) noexcept
+        :
+            name(name), value(value), branches(branches)
+        {}
     };
 
     /**
