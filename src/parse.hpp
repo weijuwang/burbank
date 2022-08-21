@@ -16,183 +16,14 @@
 #include <vector>
 #include <map>
 
+#define __BURBANK_PARSER_DEBUG_CIRCULAR false
+
+#if __BURBANK_PARSER_DEBUG_CIRCULAR
+    #include <iostream>
+#endif
+
 namespace burbank::parse
 {
-    /**
-     * @brief 
-     */
-    enum nonterminal
-    {
-        operatorUnaryPositive,
-        operatorUnaryNegate,
-        operatorUnaryAddressOf,
-        operatorUnaryDereference,
-        operatorUnaryBitwiseNot,
-        operatorUnaryLogicalNot,
-        operatorIncrementPrefix,
-        operatorDecrementPrefix,
-
-        operatorAddition,
-        operatorSubtraction,
-        operatorMultiplication,
-        operatorDivision,
-        operatorModulo,
-
-        operatorBitwiseLeftShift,
-        operatorBitwiseRightShift,
-
-        operatorLessThan,
-        operatorGreaterThan,
-        operatorLessThanOrEqualTo,
-        operatorGreaterThanOrEqualTo,
-        operatorEqualTo,
-        operatorNotEqualTo,
-
-        operatorLogicalAnd,
-        operatorLogicalOr,
-
-        operatorBitwiseAnd,
-        operatorBitwiseOr,
-        operatorBitwiseXor,
-
-        operatorMember,
-        operatorIndirect,
-        operatorSizeof,
-
-        operatorIncrementPostfix,
-        operatorDecrementPostfix,
-
-        operatorAssign,
-        operatorAssignMultiply,
-        operatorAssignDivide,
-        operatorAssignModulo,
-        operatorAssignAdd,
-        operatorAssignSubtract,
-        operatorAssignLeftShift,
-        operatorAssignRightShift,
-        operatorAssignBitwiseAnd,
-        operatorAssignBitwiseOr,
-        operatorAssignBitwiseXor,
-
-        storageClassSpecifierAuto,
-        storageClassSpecifierExtern,
-        storageClassSpecifierRegister,
-        storageClassSpecifierStatic,
-        storageClassSpecifierThreadLocal,
-        storageClassSpecifierTypedef,
-
-        typeSpecifierVoid,
-        typeSpecifierChar,
-        typeSpecifierShort,
-        typeSpecifierInt,
-        typeSpecifierLong,
-        typeSpecifierFloat,
-        typeSpecifierDouble,
-        typeSpecifierSigned,
-        typeSpecifierUnsigned,
-        typeSpecifierBool,
-
-        struct_,
-        union_,
-
-        typeQualifierConst,
-        typeQualifierRestrict,
-        typeQualifierVolatile,
-        typeQualifierAtomic,
-
-        functionSpecifierInline,
-        functionSpecifierNoReturn,
-
-        starModifier,
-        varArgs,
-
-        gotoStatement,
-        continueStatement,
-        breakStatement,
-        returnStatement,
-        whileStatement,
-        doWhileStatement,
-        forStatement,
-        ifStatement,
-        switchStatement,
-        labelStatement,
-        caseStatement,
-        defaultStatement,
-
-        /* Expressions */
-        primaryExpression,
-        genericSelection,
-        genericAssocList,
-        genericAssociation,
-        postfixExpression,
-        argumentExpressionList,
-        unaryExpression,
-        unaryOperator,
-        castExpression,
-        multiplicativeExpression,
-        additiveExpression,
-        shiftExpression,
-        relationalExpression,
-        equalityExpression,
-        bitwiseAndExpression,
-        bitwiseXorExpression,
-        bitwiseOrExpression,
-        logicalAndExpression,
-        logicalOrExpression,
-        conditionalExpression,
-        assignmentExpression,
-        expression,
-        constantExpression,
-
-        /* Declarations */
-        declaration,
-        declarationSpecifiers,
-        initDeclaratorList,
-        initDeclarator,
-        storageClassSpecifier,
-        typeSpecifier,
-        structOrUnionSpecifier,
-        structOrUnion,
-        structDeclarationList,
-        structDeclaration,
-        specifierQualifierList,
-        structDeclaratorList,
-        structDeclarator,
-        enumSpecifier,
-        enumeratorList,
-        enumerator,
-        atomicTypeSpecifier,
-        typeQualifier,
-        functionSpecifier,
-        alignmentSpecifier,
-        declarator,
-        directDeclarator,
-        pointer,
-        typeQualifierList,
-        parameterTypeList,
-        parameterList,
-        parameterDeclaration,
-        identifierList,
-        typeName,
-        abstractDeclarator,
-        directAbstractDeclarator,
-        typedefName,
-        initializer,
-        initializerList,
-        designation,
-        designatorList,
-        designator,
-        staticAssertDeclaration,
-
-        /* Statements */
-        statement,
-        jumpStatement,
-        compoundStatement,
-        declarationList,
-        statementList,
-        expressionStatement,
-    };
-
     /**
      * @brief An abstract syntax tree.
      */
@@ -204,22 +35,26 @@ namespace burbank::parse
         std::optional<nonterminal> name = std::nullopt;
 
         /**
-         * @brief The portion of the original code that corresponds to this AST.
-         * @note Since Burbank's lexer ignores whitespace between tokens, whitespace will also not appear here, including whitespace that separates tokens. Therefore, this property is only meaningful when used for individual tokens (identifiers, literals, etc).
+         * @brief The beginning of the text corresponding to this AST.
          */
-        std::string value;
+        std::string::const_iterator begin;
+
+        /**
+         * @brief The end of the text corresponding to this AST.
+         */
+        std::string::const_iterator end;
 
         /**
          * @brief Branches of this AST.
          */
-        std::vector<ast> branches = {};
+        std::vector<ast> branches;
 
         /**
          * @brief Constructs an AST tree leaf (w/ no branches).
          */
-        inline ast(const std::string& value = "") noexcept
+        inline ast(const decltype(begin) begin, const decltype(end) end) noexcept
         :
-            value(value)
+            begin(begin), end(end)
         {}
 
         /**
@@ -227,10 +62,12 @@ namespace burbank::parse
          */
         inline ast(
             const decltype(name)& name,
-            const std::string& value,
-            const decltype(branches) branches) noexcept
+            const decltype(begin) begin,
+            const decltype(end) end,
+            const decltype(branches) branches = {}
+        ) noexcept
         :
-            name(name), value(value), branches(branches)
+            name(name), begin(begin), end(end), branches(branches)
         {}
     };
 
@@ -287,7 +124,7 @@ namespace burbank::parse
     /**
      * @brief Matches a lexical token.
      */
-    SYNTAX_SPECIFIER(token, lexer::nonterminalName)
+    SYNTAX_SPECIFIER(token, nonterminal)
 
     /**
      * @brief Optionally matches another nonterminal.
@@ -297,7 +134,7 @@ namespace burbank::parse
     /**
      * @brief Repeats the given syntax at least once.
      */
-    //SYNTAX_SPECIFIER(rep, abstractSyntax*);
+    SYNTAX_SPECIFIER(rep, abstractSyntax*);
 
     /**
      * @brief Matches only one of the syntaxes given.

@@ -7,9 +7,27 @@
 
 #include "parse.hpp"
 
+using namespace burbank;
 using namespace burbank::parse;
 
-typeof(nonterminals) burbank::parse::nonterminals = {
+#define LIST_WITH_SEPARATOR(LIST, ITEM, SEPARATOR) \
+    {LIST, \
+    new list({ \
+        ITEM, \
+        new opt(new rep(new list({ \
+            SEPARATOR, \
+            ITEM \
+        }))) \
+    })}
+
+#define LIST_WITH_COMMAS(LIST, ITEM) \
+    LIST_WITH_SEPARATOR(LIST, ITEM, new lit(","))
+
+#if __BURBANK_PARSER_DEBUG_CIRCULAR
+std::size_t nested = 0;
+#endif
+
+std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
 
     {operatorUnaryPositive, new lit("+")},
     {operatorUnaryNegate, new lit("-")},
@@ -92,7 +110,8 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     {functionSpecifierNoReturn, new lit("_Noreturn")},
 
     {starModifier, new lit("*")},
-    {varArgs, new list({
+    {varArgs,
+    new list({
         new lit(","),
         new lit("...")
     })},
@@ -100,7 +119,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     {gotoStatement,
     new list({
         new lit("goto"),
-        new token(lexer::identifier),
+        new token(identifier),
         new lit(";"),
     })},
 
@@ -180,7 +199,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
 
     {labelStatement,
     new list({
-        new token(lexer::identifier),
+        new token(identifier),
         new lit(":"),
         new ref(statement)
     })},
@@ -202,9 +221,9 @@ typeof(nonterminals) burbank::parse::nonterminals = {
 
     {primaryExpression,
     new oneOf({
-        new token(lexer::identifier),
-        new token(lexer::constant),
-        new token(lexer::stringLiteral),
+        new token(identifier),
+        new token(constant),
+        new token(stringLiteral),
         new list({
             new lit("("),
             new ref(expression),
@@ -222,15 +241,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         new ref(genericAssocList),
     })},
 
-    {genericAssocList,
-    new oneOf({
-        new ref(genericAssociation),
-        new list({
-            new ref(genericAssocList),
-            new lit(","),
-            new ref(genericAssociation)
-        })
-    })},
+    LIST_WITH_COMMAS(genericAssocList, new ref(genericAssociation)),
 
     {genericAssociation,
     new list({
@@ -242,52 +253,43 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {postfixExpression,
-    new oneOf({
-        new ref(primaryExpression),
-        new list({
-            new ref(postfixExpression),
-            new oneOf({
-                new list({
-                    new lit("["),
-                    new ref(expression),
-                    new lit("]")
-                }),
-                new list({
-                    new lit("("),
-                    new opt(new ref(argumentExpressionList)),
-                    new lit(")")
-                }),
-                new list({
-                    new oneOf({
-                        new ref(operatorMember),
-                        new ref(operatorIndirect)
-                    }),
-                    new token(lexer::identifier)
-                }),
-                new ref(operatorIncrementPostfix),
-                new ref(operatorDecrementPostfix)
+    new list({
+        new oneOf({
+            new ref(primaryExpression),
+            new list({
+                new lit("("),
+                new ref(typeName),
+                new lit(")"),
+                new lit("{"),
+                new ref(initializerList),
+                new opt(new lit(",")),
+                new lit("}")
             })
         }),
-        new list({
-            new lit("("),
-            new ref(typeName),
-            new lit(")"),
-            new lit("{"),
-            new ref(initializerList),
-            new opt(new lit(",")),
-            new lit("}")
-        })
+        new opt(new rep(new oneOf({
+            new list({
+                new lit("["),
+                new ref(expression),
+                new lit("]")
+            }),
+            new list({
+                new lit("("),
+                new opt(new ref(argumentExpressionList)),
+                new lit(")")
+            }),
+            new list({
+                new oneOf({
+                    new ref(operatorMember),
+                    new ref(operatorIndirect)
+                }),
+                new token(identifier)
+            }),
+            new ref(operatorIncrementPostfix),
+            new ref(operatorDecrementPostfix)
+        })))
     })},
 
-    {argumentExpressionList,
-    new oneOf({
-        new ref(assignmentExpression),
-        new list({
-            new ref(argumentExpressionList),
-            new lit(","),
-            new ref(assignmentExpression)
-        })
-    })},
+    LIST_WITH_COMMAS(argumentExpressionList, new ref(assignmentExpression)),
 
     {unaryExpression,
     new oneOf({
@@ -340,123 +342,83 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         })
     })},
 
-    {multiplicativeExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        multiplicativeExpression,
         new ref(castExpression),
-        new list({
-            new ref(multiplicativeExpression),
-            new oneOf({
-                new ref(operatorMultiplication),
-                new ref(operatorDivision),
-                new ref(operatorModulo),
-            }),
-            new ref(castExpression)
+        new oneOf({
+            new ref(operatorMultiplication),
+            new ref(operatorDivision),
+            new ref(operatorModulo)
         })
-    })},
+    ),
 
-    {additiveExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        additiveExpression,
         new ref(multiplicativeExpression),
-        new list({
-            new ref(additiveExpression),
-            new oneOf({
-                new ref(operatorAddition),
-                new ref(operatorSubtraction),
-            }),
-            new ref(multiplicativeExpression)
+        new oneOf({
+            new ref(operatorAddition),
+            new ref(operatorSubtraction)
         })
-    })},
+    ),
 
-    {shiftExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        shiftExpression,
         new ref(additiveExpression),
-        new list({
-            new ref(shiftExpression),
-            new oneOf({
-                new ref(operatorBitwiseLeftShift),
-                new ref(operatorBitwiseRightShift),
-            }),
-            new ref(additiveExpression)
+        new oneOf({
+            new ref(operatorBitwiseLeftShift),
+            new ref(operatorBitwiseRightShift)
         })
-    })},
+    ),
 
-    {relationalExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        relationalExpression,
         new ref(shiftExpression),
-        new list({
-            new ref(relationalExpression),
-            new oneOf({
-                new ref(operatorLessThan),
-                new ref(operatorGreaterThan),
-                new ref(operatorLessThanOrEqualTo),
-                new ref(operatorGreaterThanOrEqualTo),
-            }),
-            new ref(shiftExpression)
+        new oneOf({
+            new ref(operatorLessThan),
+            new ref(operatorGreaterThan),
+            new ref(operatorLessThanOrEqualTo),
+            new ref(operatorGreaterThanOrEqualTo)
         })
-    })},
+    ),
 
-    {equalityExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        equalityExpression,
         new ref(relationalExpression),
-        new list({
-            new ref(equalityExpression),
-            new oneOf({
-                new ref(operatorEqualTo),
-                new ref(operatorNotEqualTo)
-            }),
-            new ref(relationalExpression)
+        new oneOf({
+            new ref(operatorEqualTo),
+            new ref(operatorNotEqualTo)
         })
-    })},
+    ),
 
-    {bitwiseAndExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        bitwiseAndExpression,
         new ref(equalityExpression),
-        new list({
-            new ref(bitwiseAndExpression),
-            new ref(operatorBitwiseAnd),
-            new ref(equalityExpression)
-        })
-    })},
+        new ref(operatorBitwiseAnd)
+    ),
 
-    {bitwiseXorExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        bitwiseXorExpression,
         new ref(bitwiseAndExpression),
-        new list({
-            new ref(bitwiseXorExpression),
-            new ref(operatorBitwiseXor),
-            new ref(bitwiseAndExpression)
-        })
-    })},
+        new ref(operatorBitwiseXor)
+    ),
 
-    {bitwiseOrExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        bitwiseOrExpression,
         new ref(bitwiseXorExpression),
-        new list({
-            new ref(bitwiseOrExpression),
-            new ref(operatorBitwiseOr),
-            new ref(bitwiseXorExpression)
-        })
-    })},
+        new ref(operatorBitwiseOr)
+    ),
 
-    {logicalAndExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        logicalAndExpression,
         new ref(bitwiseOrExpression),
-        new list({
-            new ref(logicalAndExpression),
-            new ref(operatorLogicalAnd),
-            new ref(bitwiseOrExpression)
-        })
-    })},
+        new ref(operatorLogicalAnd)
+    ),
 
-    {logicalOrExpression,
-    new oneOf({
+    LIST_WITH_SEPARATOR(
+        logicalOrExpression,
         new ref(logicalAndExpression),
-        new list({
-            new ref(logicalOrExpression),
-            new ref(operatorLogicalAnd),
-            new ref(logicalAndExpression)
-        })
-    })},
+        new ref(operatorLogicalOr)
+    ),
 
     {conditionalExpression,
     new list({
@@ -491,15 +453,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         })
     })},
 
-    {expression,
-    new oneOf({
-        new ref(assignmentExpression),
-        new list({
-            new ref(expression),
-            new lit(","),
-            new ref(assignmentExpression)
-        })
-    })},
+    LIST_WITH_COMMAS(expression, new ref(assignmentExpression)),
 
     {constantExpression,
     new ref(conditionalExpression)},
@@ -526,15 +480,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         new opt(new ref(declarationSpecifiers))
     })},
 
-    {initDeclaratorList,
-    new oneOf({
-        new ref(initDeclarator),
-        new list({
-            new ref(initDeclaratorList),
-            new lit(","),
-            new ref(initDeclarator)
-        })
-    })},
+    LIST_WITH_COMMAS(initDeclaratorList, new ref(initDeclarator)),
 
     {initDeclarator,
     new list({
@@ -573,9 +519,9 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     new list({
         new ref(structOrUnion),
         new oneOf({
-            new token(lexer::identifier),
+            new token(identifier),
             new list({
-                new opt(new token(lexer::identifier)),
+                new opt(new token(identifier)),
                 new lit("{"),
                 new ref(structDeclarationList),
                 new lit("}")
@@ -590,13 +536,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {structDeclarationList,
-    new oneOf({
-        new ref(structDeclaration),
-        new list({
-            new ref(structDeclarationList),
-            new ref(structDeclaration)
-        })
-    })},
+    new rep(new ref(structDeclaration))},
 
     {structDeclaration,
     new oneOf({
@@ -609,23 +549,13 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {specifierQualifierList,
-    new list({
-        new oneOf({
-            new ref(typeSpecifier),
-            new ref(typeQualifier),
-        }),
-        new opt(new ref(specifierQualifierList))
-    })},
+    new rep(new oneOf({
+        new ref(typeSpecifier),
+        new ref(typeQualifier),
+        new ref(alignmentSpecifier)
+    }))},
 
-    {structDeclaratorList,
-    new oneOf({
-        new ref(structDeclarator),
-        new list({
-            new ref(structDeclarationList),
-            new lit(","),
-            new ref(structDeclarator)
-        })
-    })},
+    LIST_WITH_COMMAS(structDeclaratorList, new ref(structDeclarator)),
 
     {structDeclarator,
     new oneOf({
@@ -641,9 +571,9 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     new list({
         new lit("enum"),
         new oneOf({
-            new token(lexer::identifier),
+            new token(identifier),
             new list({
-                new opt(new token(lexer::identifier)),
+                new opt(new token(identifier)),
                 new lit("{"),
                 new ref(enumeratorList),
                 new opt(new lit(",")),
@@ -652,19 +582,11 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         })
     })},
 
-    {enumeratorList,
-    new oneOf({
-        new ref(enumerator),
-        new list({
-            new ref(enumeratorList),
-            new lit(","),
-            new ref(enumerator)
-        })
-    })},
+    LIST_WITH_COMMAS(enumeratorList, new ref(enumerator)),
 
     {enumerator,
     new list({
-        new token(lexer::identifier),
+        new token(identifier),
         new opt(new list({
             new lit("="),
             new ref(constantExpression)
@@ -712,7 +634,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
 
     {directDeclarator,
     new oneOf({
-        new token(lexer::identifier),
+        new token(identifier),
         new list({
             new lit("("),
             new ref(declarator),
@@ -762,13 +684,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {typeQualifierList,
-    new oneOf({
-        new ref(typeQualifier),
-        new list({
-            new ref(typeQualifierList),
-            new ref(typeQualifier)
-        })
-    })},
+    new rep(new ref(typeQualifier))},
 
     {parameterTypeList,
     new list({
@@ -776,15 +692,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         new ref(varArgs)
     })},
 
-    {parameterList,
-    new oneOf({
-        new ref(parameterDeclaration),
-        new list({
-            new ref(parameterList),
-            new lit(","),
-            new ref(parameterDeclaration)
-        })
-    })},
+    LIST_WITH_COMMAS(parameterList, new ref(parameterDeclaration)),
 
     {parameterDeclaration,
     new list({
@@ -851,7 +759,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {typedefName,
-    new token(lexer::identifier)},
+    new token(identifier)},
 
     {initializer,
     new oneOf({
@@ -864,19 +772,11 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         })
     })},
 
-    {initializerList,
-    new oneOf({
+    LIST_WITH_COMMAS(initializerList,
         new list({
             new opt(new ref(designation)),
             new ref(initializer)
-        }),
-        new list({
-            new ref(initializerList),
-            new lit(","),
-            new opt(new ref(designation)),
-            new ref(initializer)
-        })
-    })},
+        })),
 
     {designation,
     new list({
@@ -885,13 +785,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {designatorList,
-    new oneOf({
-        new ref(designator),
-        new list({
-            new ref(designatorList),
-            new ref(designator)
-        })
-    })},
+    new rep(new ref(designator))},
 
     {designator,
     new oneOf({
@@ -902,7 +796,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         }),
         new list({
             new lit("."),
-            new token(lexer::identifier)
+            new token(identifier)
         })
     })},
 
@@ -912,7 +806,7 @@ typeof(nonterminals) burbank::parse::nonterminals = {
         new lit("("),
         new ref(constantExpression),
         new lit(","),
-        new token(lexer::stringLiteral),
+        new token(stringLiteral),
         new lit(")"),
         new lit(";")
     })},
@@ -941,22 +835,10 @@ typeof(nonterminals) burbank::parse::nonterminals = {
     })},
 
     {declarationList,
-    new oneOf({
-        new ref(declaration),
-        new list({
-            new ref(declarationList),
-            new ref(declaration)
-        })
-    })},
+    new rep(new ref(declaration))},
 
     {statementList,
-    new oneOf({
-        new ref(statement),
-        new list({
-            new ref(statementList),
-            new ref(statement)
-        })
-    })},
+    new rep(new ref(statement))},
 
     {expressionStatement,
     new list({
@@ -982,8 +864,8 @@ DESTROY(lit)
 
 MATCH(lit)
 {
-    if(pos->value == this->data)
-        return ast(this->data);
+    if(std::string(pos->begin, pos->end) == this->data)
+        return ast(pos->begin, pos->end);
     else
         return std::nullopt;
 }
@@ -993,30 +875,41 @@ DESTROY(ref)
 
 MATCH(ref)
 {
+#if __BURBANK_PARSER_DEBUG_CIRCULAR
+    std::cout << nested << " " << this->data << std::endl;
+    ++nested;
+#endif
     // If the referenced nonterminal exists
     if(nonterminals.contains(this->data))
     {
-        // Get its syntax, return the result of matching it, and record that this was a named rule
+        // Get its syntax, return the result of matching it
         std::optional<ast> result = nonterminals[this->data]->match(tokens, pos);
-
-        // If the syntax was named
-        if(result->name.has_value())
+#if __BURBANK_PARSER_DEBUG_CIRCULAR
+        --nested;
+#endif
+        if(result.has_value())
         {
-            // Return a node with a single branch linking to the result, so that the original name is preserved
-            return ast {
-                this->data,
-                result->value,
-                { *result }
-            };
+            // If the syntax was named
+            if(result->name.has_value())
+            {
+                // Return a node with a single branch linking to the result, so that the original name is preserved
+                return ast {
+                    this->data,
+                    result->begin,
+                    result->end,
+                    { *result }
+                };
+            }
+            else
+            {
+                // Record the name of this AST
+                result->name = this->data;
+                return result;
+            }
         }
-        else
-        {
-            result->name = this->data;
-            return result;
-        }
+        else return std::nullopt;
     }
-    else
-        return std::nullopt;
+    else return std::nullopt;
 }
 
 DESTROY(token)
@@ -1025,7 +918,7 @@ DESTROY(token)
 MATCH(token)
 {
     if(pos->name == this->data)
-        return ast(pos->value);
+        return ast(pos->name, pos->begin, pos->end);
     else
         return std::nullopt;
 }
@@ -1044,10 +937,9 @@ MATCH(opt)
         return result;
     // It's fine if not; just return an empty AST to show that the text still "matches", rather than `std::nullopt` like usual.
     else
-        return ast();
+        return ast(pos->begin, pos->begin);
 }
 
-/*
 DESTROY(rep)
 {
     delete this->data;
@@ -1055,7 +947,7 @@ DESTROY(rep)
 
 MATCH(rep)
 {
-    ast output;
+    ast output(pos->begin, pos->begin);
     std::optional<ast> result;
 
     // Until the end of the text
@@ -1068,8 +960,8 @@ MATCH(rep)
         if(not result.has_value())
             break;
 
-        // Add the corresponding text of this repeat
-        output.value.append(result->value);
+        // Extend the matched text
+        output.end = result->end;
 
         // Move forward in the text
         ++pos;
@@ -1080,12 +972,12 @@ MATCH(rep)
     }
 
     // No matches, therefore this whole repeat rule does not match
-    if(output.value.empty())
+    if(output.begin == output.end)
         return std::nullopt;
     else
         return output;
 }
-*/
+
 
 DESTROY(oneOf)
 {
@@ -1119,7 +1011,7 @@ DESTROY(list)
 
 MATCH(list)
 {
-    ast output;
+    ast output(pos->begin, pos->end);
     std::optional<ast> result;
 
     // For every single syntax in the list
@@ -1132,8 +1024,8 @@ MATCH(list)
         if(not result.has_value())
             return std::nullopt;
 
-        // Add the corresponding text of the current rule
-        output.value.append(result->value);
+        // Extend the matched text
+        output.end = result->end;
 
         // Move forward in the text
         ++pos;

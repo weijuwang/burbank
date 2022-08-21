@@ -16,6 +16,8 @@
 #include <unordered_set>
 #include <regex>
 
+#include "nonterminal.hpp"
+
 /* Helpers for regular expressions */
 #define OR "|"
 #define LITERAL(c) "\\" c
@@ -292,26 +294,12 @@ namespace burbank
 
     public:
         /**
-         * @brief A nonterminal symbol.
-         */
-        enum nonterminalName
-        {
-            newlines,
-            whitespace,
-            keyword,
-            identifier,
-            constant,
-            stringLiteral,
-            punctuator
-        };
-
-        /**
          * @brief A recognized token in a string.
          */
         struct token
         {
-            nonterminalName name;
-            std::string value;
+            nonterminal name;
+            std::string::const_iterator begin, end;
         };
 
         static const std::map<decltype(token::name), std::regex> tokens;

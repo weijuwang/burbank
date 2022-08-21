@@ -26,51 +26,37 @@ std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
     std::optional<token> longest;
     std::string tokenContent;
 
-    this->_pos = text.begin();
+    this->_pos = text.cbegin();
 
     // Until the end of the string
-    while(this->_pos != text.end())
+    while(this->_pos != text.cend())
     {
         // For each nonterminal
         for(const auto& [tokenName, regex] : nonterminals)
         {
             // If the lexeme matches at exactly `_pos`
-            if(std::regex_search(this->_pos, text.end(), this->_match, regex)
-                and this->_match[0].first == this->_pos)
-            {
+            if(std::regex_search(this->_pos, text.cend(), this->_match, regex)
+                and this->_match[0].first == this->_pos
+            ){
                 tokenContent = this->_match.str();
 
-                // Skip whitespace, or newlines if not `inclNewlines`
+                // Skip whitespace, or newlines if not `includeNewlines`
                 if(tokenName == whitespace
-                    or (not this->includeNewlines and tokenName == newlines))
-                {
+                    or (not this->includeNewlines and tokenName == newlines)
+                ){
                     this->_pos += tokenContent.length();
-                    goto nextToken;
+                    break;
                 }
 
-                if(longest.has_value()
-                    and tokenContent.length() < longest->value.length())
-                    continue;
-
                 // Add the token
-                longest = { tokenName, tokenContent };
+                output.push_back({
+                    tokenName,
+                    this->_pos,
+                    // Move forward in the text
+                    (this->_pos += tokenContent.length())
+                });
             }
         }
-
-        // If a token was matched
-        if(longest.has_value())
-        {
-            // Add the token to the list
-            output.push_back(*longest);
-
-            // Move `pos` to after the token
-            this->_pos += longest->value.length();
-
-            longest.reset();
-        }
-        else return output;
-
-        nextToken:;
     }
 
     return output;
