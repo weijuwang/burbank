@@ -73,7 +73,6 @@ namespace burbank
         operatorAssignBitwiseOr,
         operatorAssignBitwiseXor,
 
-        storageClassSpecifierAuto,
         storageClassSpecifierExtern,
         storageClassSpecifierRegister,
         storageClassSpecifierStatic,
@@ -190,5 +189,10 @@ namespace burbank
         declarationList,
         statementList,
         expressionStatement,
+
+        /* External definitions */
+        translationUnit,
+        externalDeclaration,
+        functionDefinition,
     };
 }

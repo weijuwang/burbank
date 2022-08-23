@@ -1,7 +1,7 @@
 /**
  * @file parse.cpp
  * @author Weiju Wang (weijuwang@aol.com)
- * @brief Parses C code into an AST.
+ * @brief Parses C code into an AST. @see https://docs.microsoft.com/en-us/cpp/c-language/c-language-syntax-summary?view=msvc-170
  * @date 2022-08-19
  */
 
@@ -29,6 +29,7 @@ std::size_t nested = 0;
 #endif
 
 std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
+
     {operatorUnaryPositive, new lit("+")},
     {operatorUnaryNegate, new lit("-")},
     {operatorUnaryAddressOf, new lit("&")},
@@ -80,7 +81,6 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     {operatorAssignBitwiseOr, new lit("|=")},
     {operatorAssignBitwiseXor, new lit("^=")},
 
-    {storageClassSpecifierAuto, new lit("auto")},
     {storageClassSpecifierExtern, new lit("extern")},
     {storageClassSpecifierRegister, new lit("register")},
     {storageClassSpecifierStatic, new lit("static")},
@@ -138,7 +138,7 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     {returnStatement,
     new list({
         new lit("return"),
-        new opt(new ref(expression)),
+        //new opt(new ref(expression)),
         new lit(";")
     })},
 
@@ -468,16 +468,15 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     })},
 
     {declarationSpecifiers,
-    new list({
+    new rep(
         new oneOf({
             new ref(storageClassSpecifier),
             new ref(typeSpecifier),
             new ref(typeQualifier),
             new ref(functionSpecifier),
             new ref(alignmentSpecifier)
-        }),
-        new opt(new ref(declarationSpecifiers))
-    })},
+        })
+    )},
 
     LIST_WITH_COMMAS(initDeclaratorList, new ref(initDeclarator)),
 
@@ -486,13 +485,12 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         new ref(declarator),
         new opt(new list({
             new lit("="),
-        })),
-        new ref(initializer)
+            new ref(initializer)
+        }))
     })},
 
     {storageClassSpecifier,
     new oneOf({
-        new ref(storageClassSpecifierAuto),
         new ref(storageClassSpecifierExtern),
         new ref(storageClassSpecifierRegister),
         new ref(storageClassSpecifierStatic),
@@ -632,47 +630,46 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     })},
 
     {directDeclarator,
-    new oneOf({
-        new token(identifier),
-        new list({
-            new lit("("),
-            new ref(declarator),
-            new lit(")")
-        }),
-        new list({
-            new ref(directDeclarator),
-            new oneOf({
-                new list({
-                    new lit("("),
-                    new ref(parameterTypeList),
-                    new lit(")")
-                }),
-                new list({
-                    new lit("["),
-                    new oneOf({
-                        new list({
-                            new opt(new ref(typeQualifierList)),
-                            new opt(new ref(assignmentExpression))
-                        }),
-                        new list({
-                            new ref(storageClassSpecifierStatic),
-                            new opt(new ref(typeQualifierList)),
-                            new ref(assignmentExpression)
-                        }),
-                        new list({
-                            new ref(typeQualifierList),
-                            new ref(storageClassSpecifierStatic),
-                            new opt(new ref(assignmentExpression))
-                        }),
-                        new list({
-                            new opt(new ref(typeQualifierList)),
-                            new ref(starModifier)
-                        })
-                    }),
-                    new lit("]")
-                })
+    new list({
+        new oneOf({
+            new token(identifier),
+            new list({
+                new lit("("),
+                new ref(declarator),
+                new lit(")")
             })
-        })
+        }),
+        new opt(new rep(new oneOf({
+            new list({
+                new lit("("),
+                new ref(parameterTypeList),
+                new lit(")")
+            }),
+            new list({
+                new lit("["),
+                new oneOf({
+                    new list({
+                        new opt(new ref(typeQualifierList)),
+                        new opt(new ref(assignmentExpression))
+                    }),
+                    new list({
+                        new ref(storageClassSpecifierStatic),
+                        new opt(new ref(typeQualifierList)),
+                        new ref(assignmentExpression)
+                    }),
+                    new list({
+                        new ref(typeQualifierList),
+                        new ref(storageClassSpecifierStatic),
+                        new opt(new ref(assignmentExpression))
+                    }),
+                    new list({
+                        new opt(new ref(typeQualifierList)),
+                        new ref(starModifier)
+                    })
+                }),
+                new lit("]")
+            })
+        })))
     })},
 
     {pointer,
@@ -688,7 +685,7 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     {parameterTypeList,
     new list({
         new ref(parameterList),
-        new ref(varArgs)
+        new opt(new ref(varArgs))
     })},
 
     LIST_WITH_COMMAS(parameterList, new ref(parameterDeclaration)),
@@ -843,6 +840,23 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     new list({
         new opt(new ref(expression)),
         new lit(";")
+    })},
+
+    {translationUnit,
+    new rep(new ref(externalDeclaration))},
+
+    {externalDeclaration,
+    new oneOf({
+        new ref(functionDefinition),
+        new ref(declaration)
+    })},
+
+    {functionDefinition,
+    new list({
+        new opt(new ref(declarationSpecifiers)),
+        new ref(declarator),
+        new opt(new ref(declarationList)),
+        new ref(compoundStatement)
     })}
 };
 
@@ -918,7 +932,7 @@ DESTROY(token)
 
 MATCH(token)
 {
-    if(pos == tokens.cend() or pos->name == this->data)
+    if(pos == tokens.cend() or pos->name != this->data)
         return std::nullopt;
     else
         return ast(pos->name, pos, std::next(pos));
