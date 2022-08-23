@@ -1,7 +1,7 @@
 /**
  * @file nonterminals.hpp
  * @author Weiju Wang (weijuwang@aol.com)
- * @brief 
+ * @brief @see https://docs.microsoft.com/en-us/cpp/c-language/c-language-syntax-summary?view=msvc-170
  * @date 2022-08-21
  */
 

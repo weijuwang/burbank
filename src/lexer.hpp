@@ -12,8 +12,6 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <unordered_map>
-#include <unordered_set>
 #include <regex>
 
 #include "nonterminal.hpp"

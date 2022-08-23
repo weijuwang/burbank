@@ -2,7 +2,6 @@
  * @file parse.hpp
  * @author Weiju Wang (weijuwang@aol.com)
  * @brief Parses C code into an AST.
- * @see https://docs.microsoft.com/en-us/cpp/c-language/phrase-structure-grammar?view=msvc-170
  * @date 2022-08-19
  */
 
@@ -37,12 +36,12 @@ namespace burbank::parse
         /**
          * @brief The beginning of the text corresponding to this AST.
          */
-        std::string::const_iterator begin;
+        std::vector<lexer::token>::const_iterator begin;
 
         /**
          * @brief The end of the text corresponding to this AST.
          */
-        std::string::const_iterator end;
+        std::vector<lexer::token>::const_iterator end;
 
         /**
          * @brief Branches of this AST.
@@ -50,11 +49,19 @@ namespace burbank::parse
         std::vector<ast> branches;
 
         /**
-         * @brief Constructs an AST tree leaf (w/ no branches).
+         * @brief Constructs an AST tree leaf (w/ no branches) beginning from the given token.
          */
         inline ast(const decltype(begin) begin, const decltype(end) end) noexcept
         :
             begin(begin), end(end)
+        {}
+
+        /**
+         * @brief Constructs an AST tree leaf (w/ no branches) with the given beginning and end tokens.
+         */
+        inline ast(const decltype(begin) begin) noexcept
+        :
+            begin(begin), end(begin)
         {}
 
         /**

@@ -6,6 +6,7 @@
  */
 
 #include "parse.hpp"
+#include "nonterminal.hpp"
 
 using namespace burbank;
 using namespace burbank::parse;
@@ -28,7 +29,6 @@ std::size_t nested = 0;
 #endif
 
 std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
-
     {operatorUnaryPositive, new lit("+")},
     {operatorUnaryNegate, new lit("-")},
     {operatorUnaryAddressOf, new lit("&")},
@@ -432,9 +432,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     })},
 
     {assignmentExpression,
-    new oneOf({
-        new ref(conditionalExpression),
-        new list({
+    new list({
+        new opt(new rep(new list({
             new ref(unaryExpression),
             new oneOf({
                 new ref(operatorAssign),
@@ -447,10 +446,10 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
                 new ref(operatorAssignRightShift),
                 new ref(operatorAssignBitwiseAnd),
                 new ref(operatorAssignBitwiseOr),
-                new ref(operatorAssignBitwiseXor),
-            }),
-            new ref(assignmentExpression)
-        })
+                new ref(operatorAssignBitwiseXor)
+            })
+        }))),
+        new ref(conditionalExpression)
     })},
 
     LIST_WITH_COMMAS(expression, new ref(assignmentExpression)),
@@ -864,10 +863,12 @@ DESTROY(lit)
 
 MATCH(lit)
 {
-    if(std::string(pos->begin, pos->end) == this->data)
-        return ast(pos->begin, pos->end);
-    else
+    if(pos == tokens.cend()
+        or std::string(pos->begin, pos->end) != this->data
+    )
         return std::nullopt;
+    else
+        return ast(pos, pos + 1);
 }
 
 DESTROY(ref)
@@ -917,10 +918,10 @@ DESTROY(token)
 
 MATCH(token)
 {
-    if(pos->name == this->data)
-        return ast(pos->name, pos->begin, pos->end);
-    else
+    if(pos == tokens.cend() or pos->name == this->data)
         return std::nullopt;
+    else
+        return ast(pos->name, pos, std::next(pos));
 }
 
 DESTROY(opt)
@@ -937,7 +938,7 @@ MATCH(opt)
         return result;
     // It's fine if not; just return an empty AST to show that the text still "matches", rather than `std::nullopt` like usual.
     else
-        return ast(pos->begin, pos->begin);
+        return ast(pos);
 }
 
 DESTROY(rep)
@@ -947,11 +948,14 @@ DESTROY(rep)
 
 MATCH(rep)
 {
-    ast output(pos->begin, pos->begin);
+    ast output(pos);
     std::optional<ast> result;
 
+    if(pos == tokens.cend())
+        return std::nullopt;
+
     // Until the end of the text
-    while(pos != tokens.end())
+    while(output.end != tokens.cend())
     {
         // Try to match the repeated rule
         result = this->data->match(tokens, pos);
@@ -964,7 +968,7 @@ MATCH(rep)
         output.end = result->end;
 
         // Move forward in the text
-        ++pos;
+        pos = result->end;
 
         // If this was a named rule, add the AST as a branch
         if(result->name.has_value())
@@ -989,6 +993,9 @@ MATCH(oneOf)
 {
     std::optional<ast> result;
 
+    if(pos == tokens.cend())
+        return std::nullopt;
+
     // Go through all of the alternatives
     for(const auto syntax : this->data)
     {
@@ -1011,8 +1018,11 @@ DESTROY(list)
 
 MATCH(list)
 {
-    ast output(pos->begin, pos->end);
+    ast output(pos);
     std::optional<ast> result;
+
+    if(pos == tokens.cend())
+        return std::nullopt;
 
     // For every single syntax in the list
     for(const abstractSyntax* syntax : this->data)
@@ -1028,11 +1038,17 @@ MATCH(list)
         output.end = result->end;
 
         // Move forward in the text
-        ++pos;
+        pos = result->end;
 
         // If this was a named rule, add the AST as a branch
         if(result->name.has_value())
             output.branches.push_back(*result);
+        else
+            output.branches.insert(
+                output.branches.end(),
+                result->branches.begin(),
+                result->branches.end()
+            );
     }
 
     // If we're still here, then every rule in the list matched, which is the only way the list as a whole can match.
