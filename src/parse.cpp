@@ -138,7 +138,7 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
     {returnStatement,
     new list({
         new lit("return"),
-        //new opt(new ref(expression)),
+        new opt(new ref(expression)),
         new lit(";")
     })},
 

@@ -23,7 +23,6 @@ const decltype(lexer::tokens) lexer::tokens =
 std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
 {
     std::vector<token> output;
-    std::optional<token> longest;
     std::string tokenContent;
 
     this->_pos = text.cbegin();
@@ -45,7 +44,7 @@ std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
                     or (not this->includeNewlines and tokenName == newlines)
                 ){
                     this->_pos += tokenContent.length();
-                    break;
+                    goto nextToken;
                 }
 
                 // Add the token
@@ -55,8 +54,14 @@ std::vector<lexer::token> lexer::tokenize(const std::string& text) noexcept
                     // Move forward in the text
                     (this->_pos += tokenContent.length())
                 });
+
+                goto nextToken;
             }
         }
+
+        break;
+
+        nextToken:;
     }
 
     return output;
