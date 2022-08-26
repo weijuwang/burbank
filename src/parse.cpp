@@ -21,13 +21,6 @@ using namespace burbank::parse;
         }))) \
     })}
 
-#define LIST_WITH_COMMAS(LIST, ITEM) \
-    LIST_WITH_SEPARATOR(LIST, ITEM, new lit(","))
-
-#if __BURBANK_PARSER_DEBUG_CIRCULAR
-std::size_t nested = 0;
-#endif
-
 std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
 
     {operatorUnaryPositive, new lit("+")},
@@ -241,7 +234,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         new ref(genericAssocList),
     })},
 
-    LIST_WITH_COMMAS(genericAssocList, new ref(genericAssociation)),
+    {genericAssocList,
+    new csl(new ref(genericAssociation))},
 
     {genericAssociation,
     new list({
@@ -289,7 +283,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         })))
     })},
 
-    LIST_WITH_COMMAS(argumentExpressionList, new ref(assignmentExpression)),
+    {argumentExpressionList,
+    new csl(new ref(assignmentExpression))},
 
     {unaryExpression,
     new oneOf({
@@ -452,7 +447,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         new ref(conditionalExpression)
     })},
 
-    LIST_WITH_COMMAS(expression, new ref(assignmentExpression)),
+    {expression,
+    new csl(new ref(assignmentExpression))},
 
     {constantExpression,
     new ref(conditionalExpression)},
@@ -478,7 +474,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         })
     )},
 
-    LIST_WITH_COMMAS(initDeclaratorList, new ref(initDeclarator)),
+    {initDeclaratorList,
+    new csl(new ref(initDeclarator))},
 
     {initDeclarator,
     new list({
@@ -552,7 +549,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         new ref(alignmentSpecifier)
     }))},
 
-    LIST_WITH_COMMAS(structDeclaratorList, new ref(structDeclarator)),
+    {structDeclaratorList,
+    new csl(new ref(structDeclarator))},
 
     {structDeclarator,
     new oneOf({
@@ -579,7 +577,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         })
     })},
 
-    LIST_WITH_COMMAS(enumeratorList, new ref(enumerator)),
+    {enumeratorList,
+    new csl(new ref(enumerator))},
 
     {enumerator,
     new list({
@@ -688,7 +687,8 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         new opt(new ref(varArgs))
     })},
 
-    LIST_WITH_COMMAS(parameterList, new ref(parameterDeclaration)),
+    {parameterList,
+    new csl(new ref(parameterDeclaration))},
 
     {parameterDeclaration,
     new list({
@@ -768,11 +768,11 @@ std::map<nonterminal, parse::abstractSyntax*> burbank::parse::nonterminals = {
         })
     })},
 
-    LIST_WITH_COMMAS(initializerList,
-        new list({
-            new opt(new ref(designation)),
-            new ref(initializer)
-        })),
+    {initializerList,
+    new csl(new list({
+        new opt(new ref(designation)),
+        new ref(initializer)
+    }))},
 
     {designation,
     new list({
@@ -890,18 +890,12 @@ DESTROY(ref)
 
 MATCH(ref)
 {
-#if __BURBANK_PARSER_DEBUG_CIRCULAR
-    std::cout << nested << " " << this->data << std::endl;
-    ++nested;
-#endif
     // If the referenced nonterminal exists
     if(nonterminals.contains(this->data))
     {
         // Get its syntax, return the result of matching it
         std::optional<ast> result = nonterminals[this->data]->match(tokens, pos);
-#if __BURBANK_PARSER_DEBUG_CIRCULAR
-        --nested;
-#endif
+
         if(result.has_value())
         {
             // If the syntax was named
@@ -1067,4 +1061,64 @@ MATCH(list)
 
     // If we're still here, then every rule in the list matched, which is the only way the list as a whole can match.
     return output;
+}
+
+DESTROY(csl)
+{
+    delete this->data;
+}
+
+MATCH(csl)
+{
+    ast output(pos);
+    std::optional<ast> result;
+    bool onFirstMatch = true;
+    lit* comma = new lit(",");
+
+    if(pos == tokens.cend())
+        return std::nullopt;
+
+    // Until the end of the text
+    while(output.end != tokens.cend())
+    {
+        // Match a comma before matching the actual token every time except the first.
+        if(onFirstMatch)
+            onFirstMatch = false;
+        else
+        {
+            result = comma->match(tokens, pos);
+
+            if(not result.has_value())
+                break;
+
+            // Matching a literal can only move the position forward by one token.
+            ++output.end;
+            ++pos;
+        }
+
+        // Try to match the repeated rule
+        result = this->data->match(tokens, pos);
+
+        // No more repeats; we're done
+        if(not result.has_value())
+            break;
+
+        // Extend the matched text
+        output.end = result->end;
+
+        // Move forward in the text
+        pos = result->end;
+
+        // If this was a named rule, add the AST as a branch
+        if(result->name.has_value())
+            output.branches.push_back(*result);
+    }
+
+    delete comma;
+
+    // No matches, therefore this whole repeat rule does not match
+    if(output.begin == output.end)
+        return std::nullopt;
+    else
+        return output;
 }

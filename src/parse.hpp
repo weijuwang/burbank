@@ -15,12 +15,6 @@
 #include <vector>
 #include <map>
 
-#define __BURBANK_PARSER_DEBUG_CIRCULAR false
-
-#if __BURBANK_PARSER_DEBUG_CIRCULAR
-    #include <iostream>
-#endif
-
 namespace burbank::parse
 {
     /**
@@ -28,6 +22,7 @@ namespace burbank::parse
      */
     struct ast
     {
+    public:
         /**
          * @brief The name of the nonterminal that produced this AST.
          */
@@ -76,6 +71,12 @@ namespace burbank::parse
         :
             name(name), begin(begin), end(end), branches(branches)
         {}
+
+    private:
+        /**
+         * @brief Whether this AST will be saved as its own branch.
+         */
+        bool persist = false;
     };
 
     /**
@@ -116,7 +117,7 @@ namespace burbank::parse
             ) const noexcept; \
         \
             ~NAME(void) noexcept; \
-        };
+        }
 
     /**
      * @brief Matches a string literal.
@@ -131,7 +132,7 @@ namespace burbank::parse
     /**
      * @brief Matches a lexical token.
      */
-    SYNTAX_SPECIFIER(token, nonterminal)
+    SYNTAX_SPECIFIER(token, nonterminal);
 
     /**
      * @brief Optionally matches another nonterminal.
@@ -152,6 +153,11 @@ namespace burbank::parse
      * @brief Matches all of the syntaxes given, in order.
      */
     SYNTAX_SPECIFIER(list, std::vector<abstractSyntax*>);
+
+    /**
+     * @brief Matches at least one of the given syntax delimited by a comma.
+     */
+    SYNTAX_SPECIFIER(csl, abstractSyntax*);
 
     /**
      * @brief Nonterminal symbols understood by the parser.
